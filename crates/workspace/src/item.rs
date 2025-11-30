@@ -66,6 +66,8 @@ pub struct PreviewTabsSettings {
     pub enabled: bool,
     pub enable_preview_from_file_finder: bool,
     pub enable_preview_from_code_navigation: bool,
+    pub enable_preview_from_directory_browser: bool,
+    pub enable_live_preview_in_directory_browser: bool,
 }
 
 impl Settings for ItemSettings {
@@ -90,6 +92,12 @@ impl Settings for PreviewTabsSettings {
             enable_preview_from_file_finder: preview_tabs.enable_preview_from_file_finder.unwrap(),
             enable_preview_from_code_navigation: preview_tabs
                 .enable_preview_from_code_navigation
+                .unwrap(),
+            enable_preview_from_directory_browser: preview_tabs
+                .enable_preview_from_directory_browser
+                .unwrap(),
+            enable_live_preview_in_directory_browser: preview_tabs
+                .enable_live_preview_in_directory_browser
                 .unwrap(),
         }
     }

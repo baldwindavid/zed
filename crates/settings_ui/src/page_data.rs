@@ -3183,6 +3183,50 @@ pub(crate) fn settings_data(cx: &App) -> Vec<SettingsPage> {
                     metadata: None,
                     files: USER,
                 }),
+                SettingsPageItem::SettingItem(SettingItem {
+                    title: "Enable Preview From Directory Browser",
+                    description: "Whether to open tabs in Preview mode when selected from the directory browser.",
+                    field: Box::new(SettingField {
+                        json_path: Some("preview_tabs.enable_preview_from_directory_browser"),
+                        pick: |settings_content| {
+                            settings_content
+                                .preview_tabs
+                                .as_ref()?
+                                .enable_preview_from_directory_browser
+                                .as_ref()
+                        },
+                        write: |settings_content, value| {
+                            settings_content
+                                .preview_tabs
+                                .get_or_insert_default()
+                                .enable_preview_from_directory_browser = value;
+                        },
+                    }),
+                    metadata: None,
+                    files: USER,
+                }),
+                SettingsPageItem::SettingItem(SettingItem {
+                    title: "Enable Live Preview In Directory Browser",
+                    description: "Whether to show a live preview of files when navigating in the directory browser.",
+                    field: Box::new(SettingField {
+                        json_path: Some("preview_tabs.enable_live_preview_in_directory_browser"),
+                        pick: |settings_content| {
+                            settings_content
+                                .preview_tabs
+                                .as_ref()?
+                                .enable_live_preview_in_directory_browser
+                                .as_ref()
+                        },
+                        write: |settings_content, value| {
+                            settings_content
+                                .preview_tabs
+                                .get_or_insert_default()
+                                .enable_live_preview_in_directory_browser = value;
+                        },
+                    }),
+                    metadata: None,
+                    files: USER,
+                }),
                 SettingsPageItem::SectionHeader("Layout"),
                 SettingsPageItem::SettingItem(SettingItem {
                     title: "Bottom Dock Layout",

@@ -160,6 +160,14 @@ pub struct PreviewTabsSettingsContent {
     ///
     /// Default: false
     pub enable_preview_from_code_navigation: Option<bool>,
+    /// Whether to open tabs in preview mode when selected from the directory browser.
+    ///
+    /// Default: true
+    pub enable_preview_from_directory_browser: Option<bool>,
+    /// Whether to show a live preview of files when navigating in the directory browser.
+    ///
+    /// Default: true
+    pub enable_live_preview_in_directory_browser: Option<bool>,
 }
 
 #[derive(
