@@ -816,6 +816,54 @@ fn register_actions(
                 DirectoryLister::Local(
                     workspace.project().clone(),
                     workspace.app_state().fs.clone(),
+                    None,
+                ),
+                window,
+                cx,
+            );
+
+            cx.spawn_in(window, async move |this, cx| {
+                let Some(paths) = paths.await.log_err().flatten() else {
+                    return;
+                };
+
+                if let Some(task) = this
+                    .update_in(cx, |this, window, cx| {
+                        this.open_workspace_for_paths(false, paths, window, cx)
+                    })
+                    .log_err()
+                {
+                    task.await.log_err();
+                }
+            })
+            .detach()
+        })
+        .register_action(|workspace, _: &workspace::OpenInCurrentDirectory, window, cx| {
+            telemetry::event!("Project Opened");
+
+            // Get the current file's full path (so the file is pre-selected)
+            let current_path = workspace
+                .active_item(cx)
+                .and_then(|item| item.project_path(cx))
+                .and_then(|project_path| {
+                    let worktree = workspace
+                        .project()
+                        .read(cx)
+                        .worktree_for_id(project_path.worktree_id, cx)?;
+                    Some(worktree.read(cx).absolutize(&project_path.path))
+                });
+
+            let paths = workspace.prompt_for_open_path(
+                PathPromptOptions {
+                    files: true,
+                    directories: true,
+                    multiple: true,
+                    prompt: None,
+                },
+                DirectoryLister::Local(
+                    workspace.project().clone(),
+                    workspace.app_state().fs.clone(),
+                    current_path,
                 ),
                 window,
                 cx,

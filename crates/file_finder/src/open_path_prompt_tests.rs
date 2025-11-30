@@ -393,6 +393,61 @@ async fn test_new_path_prompt(cx: &mut TestAppContext) {
     assert_eq!(collect_match_candidates(&picker, cx), vec!["dir1"]);
 }
 
+#[gpui::test]
+async fn test_open_path_prompt_with_preselect(cx: &mut TestAppContext) {
+    let app_state = init_test(cx);
+    app_state
+        .fs
+        .as_fake()
+        .insert_tree(
+            path!("/root"),
+            json!({
+                "a1": "A1",
+                "a2": "A2",
+                "a3": "A3",
+                "dir1": {},
+                "dir2": {}
+            }),
+        )
+        .await;
+
+    let project = Project::test(app_state.fs.clone(), [path!("/root").as_ref()], cx).await;
+
+    // Test preselect with DirectoryLister::Local
+    let (picker, cx) =
+        build_open_path_prompt_with_preselect(project, std::path::Path::new(path!("/root/a2")), cx);
+
+    // The query should be the parent directory with trailing separator
+    let query = picker.update(cx, |p, cx| p.query(cx));
+    assert!(
+        query.ends_with('/') || query.ends_with('\\'),
+        "Query should end with separator: {query}"
+    );
+
+    // Wait for matches to load
+    insert_query(&query, &picker, cx).await;
+
+    // The candidates should show all files in the directory
+    let candidates = collect_match_candidates(&picker, cx);
+    assert!(
+        candidates.contains(&"a1".to_string()),
+        "Should contain a1: {candidates:?}"
+    );
+    assert!(
+        candidates.contains(&"a2".to_string()),
+        "Should contain a2: {candidates:?}"
+    );
+
+    // The selected index should be the preselected file "a2"
+    let selected_index = picker.update(cx, |p, _| p.delegate.selected_index());
+    let selected_candidate = candidates.get(selected_index);
+    assert_eq!(
+        selected_candidate,
+        Some(&"a2".to_string()),
+        "Selected should be 'a2', got index {selected_index} which is {selected_candidate:?}"
+    );
+}
+
 fn init_test(cx: &mut TestAppContext) -> Arc<AppState> {
     cx.update(|cx| {
         let state = AppState::test(cx);
@@ -412,6 +467,37 @@ fn build_open_path_prompt(
     let (tx, _) = futures::channel::oneshot::channel();
     let lister = project::DirectoryLister::Project(project.clone());
     let delegate = OpenPathDelegate::new(tx, lister.clone(), creating_path, path_style);
+
+    let (workspace, cx) = cx.add_window_view(|window, cx| Workspace::test_new(project, window, cx));
+    (
+        workspace.update_in(cx, |_, window, cx| {
+            cx.new(|cx| {
+                let picker = Picker::uniform_list(delegate, window, cx)
+                    .width(rems(34.))
+                    .modal(false);
+                let query = lister.default_query(cx);
+                picker.set_query(query, window, cx);
+                picker
+            })
+        }),
+        cx,
+    )
+}
+
+fn build_open_path_prompt_with_preselect<'a>(
+    project: Entity<Project>,
+    initial_path: &std::path::Path,
+    cx: &'a mut TestAppContext,
+) -> (Entity<Picker<OpenPathDelegate>>, &'a mut VisualTestContext) {
+    let (tx, _) = futures::channel::oneshot::channel();
+    let fs = project.read_with(cx, |p, _| p.fs().clone());
+    let lister =
+        project::DirectoryLister::Local(project.clone(), fs, Some(initial_path.to_path_buf()));
+    let preselect = lister.preselect_filename();
+    let mut delegate = OpenPathDelegate::new(tx, lister.clone(), false, PathStyle::local());
+    if let Some(filename) = preselect {
+        delegate = delegate.with_preselect(filename);
+    }
 
     let (workspace, cx) = cx.add_window_view(|window, cx| Workspace::test_new(project, window, cx));
     (

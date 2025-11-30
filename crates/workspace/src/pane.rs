@@ -2218,6 +2218,7 @@ impl Pane {
                             DirectoryLister::Local(
                                 workspace.project().clone(),
                                 workspace.app_state().fs.clone(),
+                                None,
                             )
                         } else {
                             DirectoryLister::Project(workspace.project().clone())

@@ -37,6 +37,7 @@ pub struct OpenPathDelegate {
     render_footer:
         Arc<dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static>,
     hidden_entries: bool,
+    preselect_filename: Option<String>,
 }
 
 impl OpenPathDelegate {
@@ -64,7 +65,13 @@ impl OpenPathDelegate {
             replace_prompt: Task::ready(()),
             render_footer: Arc::new(|_, _| None),
             hidden_entries: false,
+            preselect_filename: None,
         }
+    }
+
+    pub fn with_preselect(mut self, filename: impl Into<String>) -> Self {
+        self.preselect_filename = Some(filename.into());
+        self
     }
 
     pub fn with_footer(
@@ -81,6 +88,14 @@ impl OpenPathDelegate {
         self.hidden_entries = true;
         self
     }
+
+    fn find_preselect_index(&mut self) -> Option<usize> {
+        let filename = self.preselect_filename.take()?;
+        self.string_matches
+            .iter()
+            .position(|m| m.string == filename)
+    }
+
     fn get_entry(&self, selected_match_index: usize) -> Option<CandidateInfo> {
         match &self.directory_state {
             DirectoryState::List { entries, .. } => {
@@ -216,8 +231,12 @@ impl OpenPathPrompt {
         cx: &mut Context<Workspace>,
     ) {
         workspace.toggle_modal(window, cx, |window, cx| {
-            let delegate =
+            let preselect = lister.preselect_filename();
+            let mut delegate =
                 OpenPathDelegate::new(tx, lister.clone(), creating_path, PathStyle::local());
+            if let Some(filename) = preselect {
+                delegate = delegate.with_preselect(filename);
+            }
             let picker = Picker::uniform_list(delegate, window, cx).width(rems(34.));
             let query = lister.default_query(cx);
             picker.set_query(query, window, cx);
@@ -419,7 +438,6 @@ impl PickerDelegate for OpenPathDelegate {
                 }
 
                 this.update(cx, |this, cx| {
-                    this.delegate.selected_index = 0;
                     this.delegate.string_matches = new_entries
                         .iter()
                         .map(|m| StringMatch {
@@ -429,6 +447,8 @@ impl PickerDelegate for OpenPathDelegate {
                             string: m.path.string.clone(),
                         })
                         .collect();
+                    this.delegate.selected_index =
+                        this.delegate.find_preselect_index().unwrap_or(0);
                     this.delegate.directory_state =
                         match &this.delegate.directory_state {
                             DirectoryState::None { create: false }
@@ -487,7 +507,6 @@ impl PickerDelegate for OpenPathDelegate {
             }
 
             this.update(cx, |this, cx| {
-                this.delegate.selected_index = 0;
                 this.delegate.string_matches = matches.clone();
                 this.delegate.string_matches.sort_by_key(|m| {
                     (
@@ -532,6 +551,8 @@ impl PickerDelegate for OpenPathDelegate {
                         }
                     }
                 };
+                this.delegate.selected_index =
+                    this.delegate.find_preselect_index().unwrap_or(0);
 
                 cx.notify();
             })

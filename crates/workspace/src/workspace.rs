@@ -231,6 +231,8 @@ actions!(
         NewWindow,
         /// Opens a file or directory.
         Open,
+        /// Opens a file or directory, starting in the current file's directory.
+        OpenInCurrentDirectory,
         /// Opens multiple files.
         OpenFiles,
         /// Opens the current location in terminal.
