@@ -881,15 +881,15 @@ impl std::hash::Hash for ColorPresentation {
 
 #[derive(Clone)]
 pub enum DirectoryLister {
-    Project(Entity<Project>),
+    Project(Entity<Project>, Option<PathBuf>),
     Local(Entity<Project>, Arc<dyn Fs>, Option<PathBuf>),
 }
 
 impl std::fmt::Debug for DirectoryLister {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DirectoryLister::Project(project) => {
-                write!(f, "DirectoryLister::Project({project:?})")
+            DirectoryLister::Project(project, initial_path) => {
+                write!(f, "DirectoryLister::Project({project:?}, {initial_path:?})")
             }
             DirectoryLister::Local(project, _, initial_path) => {
                 write!(f, "DirectoryLister::Local({project:?}, {initial_path:?})")
@@ -902,7 +902,7 @@ impl DirectoryLister {
     pub fn is_local(&self, cx: &App) -> bool {
         match self {
             DirectoryLister::Local(..) => true,
-            DirectoryLister::Project(project) => project.read(cx).is_local(),
+            DirectoryLister::Project(project, _) => project.read(cx).is_local(),
         }
     }
 
@@ -916,7 +916,7 @@ impl DirectoryLister {
 
     pub fn default_query(&self, cx: &mut App) -> String {
         let (project, initial_path) = match self {
-            DirectoryLister::Project(project) => (project, None),
+            DirectoryLister::Project(project, initial_path) => (project, initial_path.as_ref()),
             DirectoryLister::Local(project, _, initial_path) => (project, initial_path.as_ref()),
         };
         let project = project.read(cx);
@@ -952,7 +952,10 @@ impl DirectoryLister {
 
     pub fn preselect_filename(&self) -> Option<String> {
         match self {
-            DirectoryLister::Project(_) => None,
+            DirectoryLister::Project(_, initial_path) => initial_path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|name| name.to_string_lossy().into_owned()),
             DirectoryLister::Local(_, _, initial_path) => initial_path
                 .as_ref()
                 .and_then(|p| p.file_name())
@@ -962,7 +965,7 @@ impl DirectoryLister {
 
     pub fn list_directory(&self, path: String, cx: &mut App) -> Task<Result<Vec<DirectoryItem>>> {
         match self {
-            DirectoryLister::Project(project) => {
+            DirectoryLister::Project(project, _) => {
                 project.update(cx, |project, cx| project.list_directory(path, cx))
             }
             DirectoryLister::Local(_, fs, _) => {

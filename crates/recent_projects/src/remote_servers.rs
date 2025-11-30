@@ -188,7 +188,7 @@ impl ProjectPicker {
         cx: &mut Context<RemoteServerProjects>,
     ) -> Entity<Self> {
         let (tx, rx) = oneshot::channel();
-        let lister = project::DirectoryLister::Project(project.clone());
+        let lister = project::DirectoryLister::Project(project.clone(), None);
         let delegate = file_finder::OpenPathDelegate::new(tx, lister, false, path_style);
 
         let picker = cx.new(|cx| {

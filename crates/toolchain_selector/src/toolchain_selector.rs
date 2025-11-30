@@ -130,7 +130,7 @@ impl AddToolchainState {
         let weak = cx.weak_entity();
         let path_style = project.read(cx).path_style(cx);
         let lister =
-            OpenPathDelegate::new(tx, DirectoryLister::Project(project), false, path_style)
+            OpenPathDelegate::new(tx, DirectoryLister::Project(project, None), false, path_style)
                 .show_hidden()
                 .with_footer(Arc::new(move |_, cx| {
                     let error = weak

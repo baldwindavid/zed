@@ -2221,7 +2221,7 @@ impl Pane {
                                 None,
                             )
                         } else {
-                            DirectoryLister::Project(workspace.project().clone())
+                            DirectoryLister::Project(workspace.project().clone(), None)
                         };
                         workspace.prompt_for_new_path(lister, Some(suggested_name), window, cx)
                     })

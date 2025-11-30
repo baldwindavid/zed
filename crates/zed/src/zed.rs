@@ -806,6 +806,16 @@ fn register_actions(
         })
         .register_action(|workspace, _: &workspace::Open, window, cx| {
             telemetry::event!("Project Opened");
+            let is_remote = !workspace.project().read(cx).is_local();
+            let lister = if is_remote {
+                DirectoryLister::Project(workspace.project().clone(), None)
+            } else {
+                DirectoryLister::Local(
+                    workspace.project().clone(),
+                    workspace.app_state().fs.clone(),
+                    None,
+                )
+            };
             let paths = workspace.prompt_for_open_path(
                 PathPromptOptions {
                     files: true,
@@ -813,11 +823,7 @@ fn register_actions(
                     multiple: true,
                     prompt: None,
                 },
-                DirectoryLister::Local(
-                    workspace.project().clone(),
-                    workspace.app_state().fs.clone(),
-                    None,
-                ),
+                lister,
                 window,
                 cx,
             );
@@ -827,13 +833,63 @@ fn register_actions(
                     return;
                 };
 
-                if let Some(task) = this
-                    .update_in(cx, |this, window, cx| {
-                        this.open_workspace_for_paths(false, paths, window, cx)
-                    })
-                    .log_err()
-                {
-                    task.await.log_err();
+                if is_remote {
+                    // For remote projects, check if all paths are files within existing worktrees
+                    let paths_for_check = paths.clone();
+                    let check_future = this
+                        .update(cx, |workspace, cx| {
+                            let project = workspace.project().read(cx);
+                            let fs = workspace.app_state().fs.clone();
+                            let all_within = paths_for_check
+                                .iter()
+                                .all(|path| project.find_worktree(path, cx).is_some());
+                            (all_within, fs, paths_for_check)
+                        })
+                        .ok()
+                        .map(|(within, fs, paths_to_check)| async move {
+                            let metadata_futures = paths_to_check.iter().map(|path| fs.metadata(path));
+                            let metadatas = futures::future::join_all(metadata_futures).await;
+                            let all_files = metadatas
+                                .into_iter()
+                                .all(|m| m.ok().flatten().map(|m| !m.is_dir).unwrap_or(false));
+                            (within, all_files)
+                        });
+
+                    let (all_within_worktrees, all_files) = if let Some(future) = check_future {
+                        future.await
+                    } else {
+                        (false, false)
+                    };
+
+                    if all_within_worktrees && all_files {
+                        // All paths are files within existing worktrees, open in current workspace
+                        this.update_in(cx, |workspace, window, cx| {
+                            workspace
+                                .open_paths(paths, workspace::OpenOptions::default(), None, window, cx)
+                                .detach();
+                        })
+                        .ok();
+                    } else {
+                        // Some paths are directories or outside worktrees, use open_workspace_for_paths
+                        if let Some(task) = this
+                            .update_in(cx, |workspace, window, cx| {
+                                workspace.open_workspace_for_paths(false, paths, window, cx)
+                            })
+                            .log_err()
+                        {
+                            task.await.log_err();
+                        }
+                    }
+                } else {
+                    // For local projects, use open_workspace_for_paths which may open a new window
+                    if let Some(task) = this
+                        .update_in(cx, |this, window, cx| {
+                            this.open_workspace_for_paths(false, paths, window, cx)
+                        })
+                        .log_err()
+                    {
+                        task.await.log_err();
+                    }
                 }
             })
             .detach()
@@ -853,6 +909,17 @@ fn register_actions(
                     Some(worktree.read(cx).absolutize(&project_path.path))
                 });
 
+            let is_remote = !workspace.project().read(cx).is_local();
+            let lister = if is_remote {
+                DirectoryLister::Project(workspace.project().clone(), current_path.clone())
+            } else {
+                DirectoryLister::Local(
+                    workspace.project().clone(),
+                    workspace.app_state().fs.clone(),
+                    current_path.clone(),
+                )
+            };
+
             let paths = workspace.prompt_for_open_path(
                 PathPromptOptions {
                     files: true,
@@ -860,11 +927,7 @@ fn register_actions(
                     multiple: true,
                     prompt: None,
                 },
-                DirectoryLister::Local(
-                    workspace.project().clone(),
-                    workspace.app_state().fs.clone(),
-                    current_path,
-                ),
+                lister,
                 window,
                 cx,
             );
@@ -874,13 +937,63 @@ fn register_actions(
                     return;
                 };
 
-                if let Some(task) = this
-                    .update_in(cx, |this, window, cx| {
-                        this.open_workspace_for_paths(false, paths, window, cx)
-                    })
-                    .log_err()
-                {
-                    task.await.log_err();
+                if is_remote {
+                    // For remote projects, check if all paths are files within existing worktrees
+                    let paths_for_check = paths.clone();
+                    let check_future = this
+                        .update(cx, |workspace, cx| {
+                            let project = workspace.project().read(cx);
+                            let fs = workspace.app_state().fs.clone();
+                            let all_within = paths_for_check
+                                .iter()
+                                .all(|path| project.find_worktree(path, cx).is_some());
+                            (all_within, fs, paths_for_check)
+                        })
+                        .ok()
+                        .map(|(within, fs, paths_to_check)| async move {
+                            let metadata_futures = paths_to_check.iter().map(|path| fs.metadata(path));
+                            let metadatas = futures::future::join_all(metadata_futures).await;
+                            let all_files = metadatas
+                                .into_iter()
+                                .all(|m| m.ok().flatten().map(|m| !m.is_dir).unwrap_or(false));
+                            (within, all_files)
+                        });
+
+                    let (all_within_worktrees, all_files) = if let Some(future) = check_future {
+                        future.await
+                    } else {
+                        (false, false)
+                    };
+
+                    if all_within_worktrees && all_files {
+                        // All paths are files within existing worktrees, open in current workspace
+                        this.update_in(cx, |workspace, window, cx| {
+                            workspace
+                                .open_paths(paths, workspace::OpenOptions::default(), None, window, cx)
+                                .detach();
+                        })
+                        .ok();
+                    } else {
+                        // Some paths are directories or outside worktrees, use open_workspace_for_paths
+                        if let Some(task) = this
+                            .update_in(cx, |workspace, window, cx| {
+                                workspace.open_workspace_for_paths(false, paths, window, cx)
+                            })
+                            .log_err()
+                        {
+                            task.await.log_err();
+                        }
+                    }
+                } else {
+                    // For local projects, use open_workspace_for_paths which may open a new window
+                    if let Some(task) = this
+                        .update_in(cx, |this, window, cx| {
+                            this.open_workspace_for_paths(false, paths, window, cx)
+                        })
+                        .log_err()
+                    {
+                        task.await.log_err();
+                    }
                 }
             })
             .detach()
@@ -902,7 +1015,7 @@ fn register_actions(
                     multiple: true,
                     prompt: None,
                 },
-                DirectoryLister::Project(workspace.project().clone()),
+                DirectoryLister::Project(workspace.project().clone(), None),
                 window,
                 cx,
             );

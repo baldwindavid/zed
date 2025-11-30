@@ -2797,7 +2797,7 @@ impl Workspace {
                 multiple: true,
                 prompt: None,
             },
-            DirectoryLister::Project(self.project.clone()),
+            DirectoryLister::Project(self.project.clone(), None),
             window,
             cx,
         );
